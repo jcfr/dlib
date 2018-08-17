@@ -32,23 +32,25 @@ Additional options:
 import os
 import re
 import sys
-import shutil
-import platform
-import subprocess
+#import shutil
+#import platform
+#import subprocess
 import multiprocessing
-from distutils import log
+#from distutils import log
 from math import ceil,floor
 
-from setuptools import setup, Extension
-from setuptools.command.build_ext import build_ext
-from distutils.version import LooseVersion
+#from setuptools import setup, Extension
+#from setuptools.command.build_ext import build_ext
+#from distutils.version import LooseVersion
+
+from skbuild import setup
 
 
 def get_extra_cmake_options():
-    """read --clean, --yes, --no, --set, --compiler-flags, and -G options from the command line and add them as cmake switches.
+    """read --yes, --no, --set, --compiler-flags, and -G options from the command line and add them as cmake switches.
     """
     _cmake_extra_options = []
-    _clean_build_folder = False
+    #_clean_build_folder = False
 
     opt_key = None
 
@@ -71,106 +73,106 @@ def get_extra_cmake_options():
             opt_key = None
             continue
 
-        if arg == '--clean':
-            _clean_build_folder = True
-            sys.argv.remove(arg)
-            continue
+        #if arg == '--clean':
+        #    _clean_build_folder = True
+        #    sys.argv.remove(arg)
+        #    continue
 
         if arg in ['--yes', '--no', '--set', '--compiler-flags']:
             opt_key = arg[2:].lower()
             sys.argv.remove(arg)
             continue
-        if arg in ['-G']:
-            opt_key = arg[1:]
-            sys.argv.remove(arg)
-            continue
+        #if arg in ['-G']:
+        #    opt_key = arg[1:]
+        #    sys.argv.remove(arg)
+        #    continue
 
-    return _cmake_extra_options, _clean_build_folder
+    return _cmake_extra_options#, _clean_build_folder
 
-cmake_extra_options,clean_build_folder = get_extra_cmake_options()
-
-
-class CMakeExtension(Extension):
-    def __init__(self, name, sourcedir=''):
-        Extension.__init__(self, name, sources=[])
-        self.sourcedir = os.path.abspath(sourcedir)
-
-def rmtree(name):
-    """remove a directory and its subdirectories.
-    """
-    def remove_read_only(func, path, exc):
-        excvalue = exc[1]
-        if func in (os.rmdir, os.remove) and excvalue.errno == errno.EACCES:
-            os.chmod(path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
-            func(path)
-        else:
-            raise
-
-    if os.path.exists(name):
-        log.info('Removing old directory {}'.format(name))
-        shutil.rmtree(name, ignore_errors=False, onerror=remove_read_only)
+#cmake_extra_options,clean_build_folder = get_extra_cmake_options()
 
 
-class CMakeBuild(build_ext):
+#class CMakeExtension(Extension):
+#    def __init__(self, name, sourcedir=''):
+#        Extension.__init__(self, name, sources=[])
+#        self.sourcedir = os.path.abspath(sourcedir)
 
-    def get_cmake_version(self):
-        try:
-            out = subprocess.check_output(['cmake', '--version'])
-        except OSError:
-            raise RuntimeError("\n*******************************************************************\n" +
-                                  " CMake must be installed to build the following extensions: " +
-                               ", ".join(e.name for e in self.extensions) + 
-                               "\n*******************************************************************\n")
-        return re.search(r'version\s*([\d.]+)', out.decode()).group(1)
+#def rmtree(name):
+#    """remove a directory and its subdirectories.
+#    """
+#    def remove_read_only(func, path, exc):
+#        excvalue = exc[1]
+#        if func in (os.rmdir, os.remove) and excvalue.errno == errno.EACCES:
+#            os.chmod(path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+#            func(path)
+#        else:
+#            raise
+#
+#    if os.path.exists(name):
+#        log.info('Removing old directory {}'.format(name))
+#        shutil.rmtree(name, ignore_errors=False, onerror=remove_read_only)
 
-    def run(self):
-        cmake_version = self.get_cmake_version()
-        if platform.system() == "Windows":
-            if LooseVersion(cmake_version) < '3.1.0':
-                raise RuntimeError("CMake >= 3.1.0 is required on Windows")
 
-        for ext in self.extensions:
-            self.build_extension(ext)
+#class CMakeBuild(build_ext):
+#
+#    def get_cmake_version(self):
+#        try:
+#            out = subprocess.check_output(['cmake', '--version'])
+#        except OSError:
+#            raise RuntimeError("\n*******************************************************************\n" +
+#                                  " CMake must be installed to build the following extensions: " +
+#                               ", ".join(e.name for e in self.extensions) + 
+#                               "\n*******************************************************************\n")
+#        return re.search(r'version\s*([\d.]+)', out.decode()).group(1)
 
-    def build_extension(self, ext):
-        extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
-
-        cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,
-                      '-DPYTHON_EXECUTABLE=' + sys.executable]
-
-        cmake_args += cmake_extra_options 
-
-        cfg = 'Debug' if self.debug else 'Release'
-        build_args = ['--config', cfg]
-
-        if platform.system() == "Windows":
-            cmake_args += ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{}={}'.format(cfg.upper(), extdir)]
-            if sys.maxsize > 2**32:
-                cmake_args += ['-A', 'x64']
-            # Do a parallel build
-            build_args += ['--', '/m'] 
-        else:
-            cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
-            # Do a parallel build
-            build_args += ['--', '-j'+str(num_available_cpu_cores(2))]
-
-        build_folder = os.path.abspath(self.build_temp)
-
-        if clean_build_folder:
-            rmtree(build_folder)
-        if not os.path.exists(build_folder):
-            os.makedirs(build_folder)
-
-        cmake_setup = ['cmake', ext.sourcedir] + cmake_args
-        cmake_build = ['cmake', '--build', '.'] + build_args
-
-        print("Building extension for Python {}".format(sys.version.split('\n',1)[0]))
-        print("Invoking CMake setup: '{}'".format(' '.join(cmake_setup)))
-        sys.stdout.flush()
-        subprocess.check_call(cmake_setup, cwd=build_folder)
-        print("Invoking CMake build: '{}'".format(' '.join(cmake_build)))
-        sys.stdout.flush()
-        subprocess.check_call(cmake_build, cwd=build_folder)
+#    def run(self):
+#        cmake_version = self.get_cmake_version()
+#        if platform.system() == "Windows":
+#            if LooseVersion(cmake_version) < '3.1.0':
+#                raise RuntimeError("CMake >= 3.1.0 is required on Windows")
+#
+#        for ext in self.extensions:
+#            self.build_extension(ext)
+#
+#    def build_extension(self, ext):
+#        extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
+#
+#        cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,
+#                      '-DPYTHON_EXECUTABLE=' + sys.executable]
+#
+#        cmake_args += cmake_extra_options 
+#
+#        cfg = 'Debug' if self.debug else 'Release'
+#        build_args = ['--config', cfg]
+#
+#        if platform.system() == "Windows":
+#            cmake_args += ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{}={}'.format(cfg.upper(), extdir)]
+#            if sys.maxsize > 2**32:
+#                cmake_args += ['-A', 'x64']
+#            # Do a parallel build
+#            build_args += ['--', '/m'] 
+#        else:
+#            cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
+#            # Do a parallel build
+#            build_args += ['--', '-j'+str(num_available_cpu_cores(2))]
+#
+#        build_folder = os.path.abspath(self.build_temp)
+#
+#        if clean_build_folder:
+#            rmtree(build_folder)
+#        if not os.path.exists(build_folder):
+#            os.makedirs(build_folder)
+#
+#        cmake_setup = ['cmake', ext.sourcedir] + cmake_args
+#        cmake_build = ['cmake', '--build', '.'] + build_args
+#
+#        print("Building extension for Python {}".format(sys.version.split('\n',1)[0]))
+#        print("Invoking CMake setup: '{}'".format(' '.join(cmake_setup)))
+#        sys.stdout.flush()
+#        subprocess.check_call(cmake_setup, cwd=build_folder)
+#        print("Invoking CMake build: '{}'".format(' '.join(cmake_build)))
+#        sys.stdout.flush()
+#        subprocess.check_call(cmake_build, cwd=build_folder)
 
 def num_available_cpu_cores(ram_per_build_process_in_gb):
     if 'TRAVIS' in os.environ and os.environ['TRAVIS']=='true':
@@ -190,20 +192,20 @@ def num_available_cpu_cores(ram_per_build_process_in_gb):
         return 2 # just assume 2 if we can't get the os to tell us the right answer.
 
 
-from setuptools.command.test import test as TestCommand
-class PyTest(TestCommand):
-    user_options = [('pytest-args=', 'a', "Arguments to pass to pytest")]
-
-    def initialize_options(self):
-        TestCommand.initialize_options(self)
-        self.pytest_args = '--ignore docs --ignore dlib'
-
-    def run_tests(self):
-        import shlex
-        #import here, cause outside the eggs aren't loaded
-        import pytest
-        errno = pytest.main(shlex.split(self.pytest_args))
-        sys.exit(errno)
+#from setuptools.command.test import test as TestCommand
+#class PyTest(TestCommand):
+#    user_options = [('pytest-args=', 'a', "Arguments to pass to pytest")]
+#
+#    def initialize_options(self):
+#        TestCommand.initialize_options(self)
+#        self.pytest_args = '--ignore docs --ignore dlib'
+#
+#    def run_tests(self):
+#        import shlex
+#        #import here, cause outside the eggs aren't loaded
+#        import pytest
+#        errno = pytest.main(shlex.split(self.pytest_args))
+#        sys.exit(errno)
 
 def read_version_from_cmakelists(cmake_file):
     """Read version information
@@ -213,10 +215,10 @@ def read_version_from_cmakelists(cmake_file):
     patch = re.findall("set\(CPACK_PACKAGE_VERSION_PATCH.*\"(.*)\"", open(cmake_file).read())[0]
     return major + '.' + minor + '.' + patch
 
-def read_entire_file(fname):
-    """Read text out of a file relative to setup.py.
-    """
-    return open(os.path.join(fname)).read()
+#def read_entire_file(fname):
+#    """Read text out of a file relative to setup.py.
+#    """
+#    return open(os.path.join(fname)).read()
 
 setup(
     name='dlib',
@@ -227,11 +229,13 @@ setup(
     author_email='davis@dlib.net',
     url='https://github.com/davisking/dlib',
     license='Boost Software License',
-    ext_modules=[CMakeExtension('dlib','tools/python')],
-    cmdclass=dict(build_ext=CMakeBuild, test=PyTest),
-    zip_safe=False,
+    cmake_source_dir="tools/python",
+    cmake_args=get_extra_cmake_options(),
+    #ext_modules=[CMakeExtension('dlib','tools/python')],
+    #cmdclass=dict(build_ext=CMakeBuild, test=PyTest),
+    #zip_safe=False,
     tests_require=['pytest'],
-    packages=['dlib'],
+    #packages=['dlib'],
     keywords=['dlib', 'Computer Vision', 'Machine Learning'],
     classifiers=[
         'Development Status :: 5 - Production/Stable',

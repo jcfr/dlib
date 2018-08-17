@@ -70,5 +70,7 @@ endif()
 pybind11_add_module(dlib_python ${python_srcs})
 target_link_libraries(dlib_python PRIVATE dlib::dlib)
 # Set the output library name to dlib because that's what setup.py and distutils expects.
-set_target_properties(dlib_python PROPERTIES OUTPUT_NAME dlib)
+set_target_properties(dlib_python PROPERTIES OUTPUT_NAME _dlib)
+
+install(TARGETS dlib_python LIBRARY DESTINATION "dlib")
 
